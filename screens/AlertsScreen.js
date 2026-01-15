@@ -13,13 +13,25 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Navbar from '../components/Navbar';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
+// Firebase imports acceder a une collection/add document/edit/delete/doc acceder a un doc specifique lire les donne en temps reel
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  updateDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { db } from '../firebaseConfig';//base donne
+
 const AlertsScreen = () => {
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();//marge de securité
   
   // State for alert tone
   const [alertTone, setAlertTone] = useState('Rescue Beacon');
@@ -36,17 +48,31 @@ const AlertsScreen = () => {
   const [smsFallback, setSmsFallback] = useState(true);
   const [sendSMS, setSendSMS] = useState(true);
   
-  // State for contacts management
-  const [contacts, setContacts] = useState([
-    { id: 1, name: 'Mom', phone: '+212 612-345678', isEmergency: true },
-    { id: 2, name: 'Dad', phone: '+212 698-765432', isEmergency: true },
-    { id: 3, name: 'Brother', phone: '+212 600-112233', isEmergency: false },
-  ]);
+  // State for contacts management with Firebase
+  const [contacts, setContacts] = useState([]);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
   const [newContactIsEmergency, setNewContactIsEmergency] = useState(true);
+  
+  // State for recent alerts
+  const [recentAlerts, setRecentAlerts] = useState([
+    {
+      id: 1,
+      title: "Location shared",
+      details: "Yesterday • 6:40 PM • Mom, Partner",
+      timestamp: new Date(Date.now() - 86400000), // Yesterday
+      type: "location"
+    },
+    {
+      id: 2,
+      title: "Low battery warning",
+      details: "Yesterday • 12:05 PM • Sent as SMS fallback",
+      timestamp: new Date(Date.now() - 90000000), // Yesterday afternoon
+      type: "warning"
+    }
+  ]);
   
   // Alert tone options
   const alertToneOptions = [
@@ -67,8 +93,75 @@ const AlertsScreen = () => {
     'None',
   ];
 
+  // READ CONTACTS FROM FIREBASE Transforme les données Firestore en tableau JavaScript
+  //snapshot représente l’état actuel de la base de données en temps réel
+  //onsnapshot listener en temps reel de firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "contacts"), snapshot => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setContacts(data);
+    });
+
+    return () => unsubscribe();//lorsque on quitte la page en arrete l ecoute avec firebase
+  }, []);
+
+  // Function to format date for display
+  const formatTimeAgo = (date) => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes} min ago`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else if (diffInSeconds < 172800) {
+      return 'Yesterday';
+    } else {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+  };
+
+  // Function to format time for display
+  const formatTime = (date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Function to send SMS to contacts
+  const sendSMSToContacts = async (emergencyContacts) => {
+    const message = "🚨 SOS ALERT 🚨\n\nI need immediate help! This is a TEST ALERT from the emergency app.\n\nLocation: Test Location\nTime: " + new Date().toLocaleTimeString() + "\nStatus: TEST - Please ignore if this is a drill\n\nReply if you receive this.";
+    
+    try {
+      // For each emergency contact, create SMS link
+      for (const contact of emergencyContacts) {
+        const smsUrl = `sms:${contact.phone.replace(/\s/g, '')}?body=${encodeURIComponent(message)}`;
+        
+        // Check if we can open the SMS app
+        const canOpen = await Linking.canOpenURL(smsUrl);
+        if (canOpen) {
+          // For now, we'll just log it and show an alert
+          console.log(`SMS prepared for ${contact.name}: ${contact.phone}`);
+          console.log(`Message: ${message}`);
+        }
+      }
+      
+      // For demo purposes, we'll simulate sending
+      return true;
+    } catch (error) {
+      console.error("Error preparing SMS:", error);
+      return false;
+    }
+  };
+
   // Function to send test alert
-  const sendTestAlert = () => {
+  const sendTestAlert = async () => {
     Alert.alert(
       "Send Test Alert",
       "This will send a test alert to your emergency contacts and services. Are you sure?",
@@ -79,18 +172,79 @@ const AlertsScreen = () => {
         },
         { 
           text: "Send Test", 
-          onPress: () => {
-            // Get emergency contacts
-            const emergencyContacts = contacts.filter(c => c.isEmergency);
-            
-            // Show success message
-            Alert.alert(
-              "Test Alert Sent",
-              `Test alert has been sent to ${emergencyContacts.length} emergency contacts.`,
-              [{ text: "OK" }]
-            );
-            
-            console.log("Test alert sent to:", emergencyContacts);
+          onPress: async () => {
+            try {
+              // Get emergency contacts
+              const emergencyContacts = contacts.filter(c => c.emergency);
+              
+              if (emergencyContacts.length === 0) {
+                Alert.alert(
+                  "No Emergency Contacts",
+                  "Please add emergency contacts first before sending test alerts.",
+                  [{ text: "OK" }]
+                );
+                return;
+              }
+              
+              // Show sending status
+              Alert.alert(
+                "Sending Test Alert...",
+                "Please wait while we send the test alert.",
+                [],
+                { cancelable: false }
+              );
+              
+              // Add new alert to recent alerts
+              const newAlert = {
+                id: recentAlerts.length + 1,
+                title: "Test SOS Alert Sent",
+                details: `Today • ${formatTime(new Date())} • Delivered to ${emergencyContacts.length} contacts`,
+                timestamp: new Date(),
+                type: "sos",
+                contactsCount: emergencyContacts.length
+              };
+              
+              // Update recent alerts with new alert at the top
+              setRecentAlerts([newAlert, ...recentAlerts]);
+              
+              // Send SMS to emergency contacts if enabled
+              //SMS activé + succès →  message vert
+              //SMS activé + échec →  message warning
+              //SMS désactivé → ℹ message info
+              //Erreur → message erreur
+              if (sendSMS) {
+                const smsSent = await sendSMSToContacts(emergencyContacts);
+                
+                if (smsSent) {
+                  Alert.alert(
+                    "Test Alert Sent Successfully",
+                    `✅ SMS sent to ${emergencyContacts.length} emergency contacts.\n\nNote: In a real app, SMS would be sent via your phone's messaging app or SMS gateway.`,
+                    [{ text: "OK" }]
+                  );
+                } else {
+                  Alert.alert(
+                    "Test Alert Partially Sent",
+                    `⚠️ Alert logged but SMS sending failed. Check your SMS permissions.\n\nEmergency contacts notified: ${emergencyContacts.length}`,
+                    [{ text: "OK" }]
+                  );
+                }
+              } else {
+                Alert.alert(
+                  "Test Alert Logged",
+                  `Test alert has been logged and will be sent to ${emergencyContacts.length} emergency contacts when SMS is enabled.`,
+                  [{ text: "OK" }]
+                );
+              }
+              
+              console.log("Test alert sent to:", emergencyContacts);
+            } catch (error) {
+              console.error("Error sending test alert:", error);
+              Alert.alert(
+                "Error",
+                "Failed to send test alert. Please try again.",
+                [{ text: "OK" }]
+              );
+            }
           }
         }
       ]
@@ -99,45 +253,49 @@ const AlertsScreen = () => {
 
   // Function to manage contacts
   const manageContacts = () => {
-    setShowContactsModal(true);
+    setShowContactsModal(true);//FENETRE OUVERTE
   };
 
-  // Function to add new contact
-  const addNewContact = () => {
+  // ➕ ADD CONTACT TO FIREBASE
+  const addNewContact = async () => {
     if (!newContactName.trim() || !newContactPhone.trim()) {
       Alert.alert("Error", "Please enter both name and phone number");
       return;
     }
 
     // Validate phone number (simple validation)
+    //commence éventuellement par +, contient uniquement des chiffres, espaces,
+    //  tirets ou parenthèses, et fait au moins 8 caractère
     const phoneRegex = /^\+?[\d\s\-\(\)]{8,}$/;
     if (!phoneRegex.test(newContactPhone)) {
       Alert.alert("Error", "Please enter a valid phone number");
       return;
     }
 
-    const newContact = {
-      id: contacts.length + 1,
-      name: newContactName.trim(),
-      phone: newContactPhone.trim(),
-      isEmergency: newContactIsEmergency,
-    };
-
-    setContacts([...contacts, newContact]);
-    
-    // Reset form
-    setNewContactName('');
-    setNewContactPhone('');
-    setNewContactIsEmergency(true);
-    
-    // Close add modal
-    setShowAddContactModal(false);
-    
-    Alert.alert("Success", `${newContact.name} added as ${newContactIsEmergency ? 'emergency' : 'regular'} contact`);
+    try {
+      await addDoc(collection(db, "contacts"), {
+        name: newContactName.trim(),
+        phone: newContactPhone.trim(),
+        emergency: newContactIsEmergency,
+      });
+      
+      // Reset form
+      setNewContactName('');
+      setNewContactPhone('');
+      setNewContactIsEmergency(true);
+      
+      // Close add modal
+      setShowAddContactModal(false);
+      
+      Alert.alert("Success", `${newContactName} added as ${newContactIsEmergency ? 'emergency' : 'regular'} contact`);
+    } catch (error) {
+      Alert.alert("Error", "Failed to add contact. Please try again.");
+      console.error("Error adding contact: ", error);
+    }
   };
 
-  // Function to remove contact
-  const removeContact = (contactId, contactName) => {
+  // ❌ DELETE CONTACT FROM FIREBASE
+  const removeContact = async (contactId, contactName) => {
     Alert.alert(
       "Remove Contact",
       `Are you sure you want to remove ${contactName}?`,
@@ -146,30 +304,37 @@ const AlertsScreen = () => {
         { 
           text: "Remove", 
           style: "destructive",
-          onPress: () => {
-            const updatedContacts = contacts.filter(c => c.id !== contactId);
-            setContacts(updatedContacts);
-            Alert.alert("Success", `${contactName} removed from contacts`);
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "contacts", contactId));
+              Alert.alert("Success", `${contactName} removed from contacts`);
+            } catch (error) {
+              Alert.alert("Error", "Failed to remove contact. Please try again.");
+              console.error("Error removing contact: ", error);
+            }
           }
         }
       ]
     );
   };
 
-  // Function to toggle emergency status
-  const toggleEmergencyStatus = (contactId, contactName) => {
-    const updatedContacts = contacts.map(contact => {
-      if (contact.id === contactId) {
-        const newStatus = !contact.isEmergency;
-        Alert.alert(
-          "Status Updated",
-          `${contactName} is now ${newStatus ? 'emergency' : 'regular'} contact`
-        );
-        return { ...contact, isEmergency: newStatus };
-      }
-      return contact;
-    });
-    setContacts(updatedContacts);
+  // TOGGLE EMERGENCY STATUS IN FIREBASE
+  //va dans la collection contacts sur Firebase et inverse la valeur de emergency pour ce contact.
+  const toggleEmergencyStatus = async (contactId, contactName, currentEmergencyStatus) => {
+    try {
+      await updateDoc(doc(db, "contacts", contactId), {
+        emergency: !currentEmergencyStatus,
+      });
+      
+      const newStatus = !currentEmergencyStatus;
+      Alert.alert(
+        "Status Updated",
+        `${contactName} is now ${newStatus ? 'emergency' : 'regular'} contact`
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to update contact status. Please try again.");
+      console.error("Error updating contact: ", error);
+    }
   };
 
   // Function to change alert tone
@@ -187,22 +352,55 @@ const AlertsScreen = () => {
   };
 
   // Function to handle alert item view/details
-  const handleAlertAction = (alertTitle, actionType) => {
+  const handleAlertAction = (alert) => {
     Alert.alert(
-      alertTitle,
-      actionType === 'view' 
-        ? "Viewing alert details..." 
-        : "Showing alert details...",
+      alert.title,
+      "Viewing alert details...",
       [
         { text: "Cancel", style: "cancel" },
         { 
-          text: actionType === 'view' ? "View Details" : "Show Details", 
+          text: "View Details", 
           onPress: () => {
+            const timeString = formatTime(alert.timestamp);
+            const dateString = alert.timestamp.toLocaleDateString();
+            
+            let details = `Alert: ${alert.title}\n`;
+            details += `Time: ${timeString}\n`;
+            details += `Date: ${dateString}\n`;
+            details += `Type: ${alert.type === 'sos' ? 'SOS Emergency' : alert.type === 'location' ? 'Location Share' : 'System Warning'}\n\n`;
+            
+            if (alert.contactsCount) {
+              details += `Contacts Notified: ${alert.contactsCount}\n`;
+            }
+            
+            details += `Status: Delivered\n`;
+            details += `Action Taken: Emergency services notified\n`;
+            details += `Mode: ${sendSMS ? 'SMS Enabled' : 'Notification Only'}`;
+            
             Alert.alert(
               "Alert Details",
-              `Alert: ${alertTitle}\n\nStatus: Delivered\nTime: Recent\nAction Taken: Emergency services notified`,
+              details,
               [{ text: "OK" }]
             );
+          }
+        }
+      ]
+    );
+  };
+
+  // Function to clear all alerts
+  const clearAllAlerts = () => {
+    Alert.alert(
+      "Clear All Alerts",
+      "Are you sure you want to clear all recent alerts?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear All", 
+          style: "destructive",
+          onPress: () => {
+            setRecentAlerts([]);
+            Alert.alert("Success", "All alerts cleared");
           }
         }
       ]
@@ -243,9 +441,63 @@ const AlertsScreen = () => {
         { 
           text: "Call", 
           onPress: () => {
-            // In a real app, you would use Linking to make the call
-            console.log(`Calling ${contactName}: ${phoneNumber}`);
-            Alert.alert("Calling", `Connecting to ${contactName}...`);
+            // Clean phone number for calling
+            //"+212 6 12-34-56" → devient "+2126123456"
+            const cleanPhone = phoneNumber.replace(/[^0-9+]/g, '');
+            const phoneUrl = `tel:${cleanPhone}`;
+            
+            Linking.canOpenURL(phoneUrl)
+              .then((supported) => {
+                if (supported) {
+                  return Linking.openURL(phoneUrl);
+                } else {
+                  Alert.alert("Error", "Phone calling is not supported on this device");
+                }
+              })
+              .catch((err) => {
+                console.error("Error opening phone app:", err);
+                Alert.alert("Error", "Could not open phone app");
+              });
+          }
+        }
+      ]
+    );
+  };
+
+  // Function to send test SMS immediately
+  const sendTestSMSNow = () => {
+    const emergencyContacts = contacts.filter(c => c.emergency);
+    
+    if (emergencyContacts.length === 0) {
+      Alert.alert(
+        "No Emergency Contacts",
+        "Please add emergency contacts first before sending SMS.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    
+    Alert.alert(
+      "Send Test SMS",
+      `Send a test SMS to ${emergencyContacts.length} emergency contacts?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send SMS",
+          onPress: async () => {
+            try {
+              const smsSent = await sendSMSToContacts(emergencyContacts);
+              
+              if (smsSent) {
+                Alert.alert(
+                  "SMS Ready",
+                  "SMS message has been prepared. In a real app, this would open your messaging app with the message ready to send.\n\nOn a real device with SMS permissions, this would automatically send the SMS to all emergency contacts.",
+                  [{ text: "OK" }]
+                );
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to prepare SMS. Please check permissions.");
+            }
           }
         }
       ]
@@ -402,29 +654,34 @@ const AlertsScreen = () => {
 
           {/* Recent Alerts Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Alerts</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Recent Alerts</Text>
+              {recentAlerts.length > 0 && (
+                <TouchableOpacity onPress={clearAllAlerts}>
+                  <Text style={styles.clearAllText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             
             {/* Alert Items */}
-            <AlertItem
-              title="Test SOS sent"
-              details="Today • 2:14 PM • Delivered to 3 contacts"
-              onPress={() => handleAlertAction("Test SOS sent", "view")}
-              buttonText="View"
-            />
-            
-            <AlertItem
-              title="Location shared"
-              details="Yesterday • 6:40 PM • Mom, Partner"
-              onPress={() => handleAlertAction("Location shared", "details")}
-              buttonText="Details"
-            />
-            
-            <AlertItem
-              title="Low battery warning"
-              details="Yesterday • 12:05 PM • Sent as SMS fallback"
-              onPress={() => handleAlertAction("Low battery warning", "view")}
-              buttonText="View"
-            />
+            {recentAlerts.length === 0 ? (
+              <View style={styles.noAlertsContainer}>
+                <Text style={styles.noAlertsText}>No recent alerts</Text>
+                <Text style={styles.noAlertsSubtext}>Send a test alert to see it here</Text>
+              </View>
+            ) : (
+              recentAlerts.map((alert) => (
+                <AlertItem
+                  key={alert.id}
+                  title={alert.title}
+                  details={alert.details}
+                  onPress={() => handleAlertAction(alert)}
+                  buttonText="View"
+                  timestamp={alert.timestamp}
+                  type={alert.type}
+                />
+              ))
+            )}
           </View>
 
           {/* Action Buttons */}
@@ -434,7 +691,17 @@ const AlertsScreen = () => {
               onPress={sendTestAlert}
               activeOpacity={0.8}
             >
+              <Icon name="warning" size={24} color="#fff" style={styles.buttonIcon} />
               <Text style={styles.testAlertButtonText}>Send Test Alert</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.testSMSButton}
+              onPress={sendTestSMSNow}
+              activeOpacity={0.8}
+            >
+              <Icon name="sms" size={24} color="#fff" style={styles.buttonIcon} />
+              <Text style={styles.testSMSButtonText}>Test SMS Now</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -442,6 +709,7 @@ const AlertsScreen = () => {
               onPress={manageContacts}
               activeOpacity={0.8}
             >
+              <Icon name="contacts" size={24} color="#333" style={styles.buttonIcon} />
               <Text style={styles.manageContactsButtonText}>Manage Contacts</Text>
             </TouchableOpacity>
           </View>
@@ -482,7 +750,7 @@ const AlertsScreen = () => {
                     <View style={styles.contactInfo}>
                       <View style={styles.contactNameRow}>
                         <Text style={styles.contactName}>{contact.name}</Text>
-                        {contact.isEmergency && (
+                        {contact.emergency && (
                           <View style={styles.emergencyBadge}>
                             <Text style={styles.emergencyBadgeText}>Emergency</Text>
                           </View>
@@ -499,12 +767,12 @@ const AlertsScreen = () => {
                       </TouchableOpacity>
                       <TouchableOpacity 
                         style={styles.contactActionButton}
-                        onPress={() => toggleEmergencyStatus(contact.id, contact.name)}
+                        onPress={() => toggleEmergencyStatus(contact.id, contact.name, contact.emergency)}
                       >
                         <Icon 
-                          name={contact.isEmergency ? "star" : "star-border"} 
+                          name={contact.emergency ? "star" : "star-border"} 
                           size={20} 
-                          color={contact.isEmergency ? "#FFA000" : "#666"} 
+                          color={contact.emergency ? "#FFA000" : "#666"} 
                         />
                       </TouchableOpacity>
                       <TouchableOpacity 
@@ -592,7 +860,7 @@ const AlertsScreen = () => {
               <View style={styles.toggleGroup}>
                 <Text style={styles.toggleLabel}>Emergency Contact</Text>
                 <Text style={styles.toggleDescription}>
-                  Emergency contacts will receive all SOS alerts
+                  Emergency contacts will receive all SOS alerts and SMS messages
                 </Text>
                 <View style={styles.toggleRow}>
                   <Text style={styles.toggleStatus}>
@@ -712,21 +980,49 @@ const AlertsScreen = () => {
 };
 
 // Alert Item Component
-const AlertItem = ({ title, details, onPress, buttonText }) => (
-  <View style={styles.alertItem}>
-    <View style={styles.alertContent}>
-      <Text style={styles.alertTitle}>{title}</Text>
-      <Text style={styles.alertDetails}>{details}</Text>
+const AlertItem = ({ title, details, onPress, buttonText, timestamp, type }) => {
+  const getAlertIcon = () => {
+    switch(type) {
+      case 'sos': return 'warning';
+      case 'location': return 'location-on';
+      case 'warning': return 'battery-alert';
+      default: return 'notifications';
+    }
+  };
+
+  const getAlertColor = () => {
+    switch(type) {
+      case 'sos': return '#dc2626';
+      case 'location': return '#0066cc';
+      case 'warning': return '#f59e0b';
+      default: return '#666';
+    }
+  };
+
+  return (
+    <View style={styles.alertItem}>
+      <View style={styles.alertIconContainer}>
+        <Icon name={getAlertIcon()} size={24} color={getAlertColor()} />
+      </View>
+      <View style={styles.alertContent}>
+        <Text style={styles.alertTitle}>{title}</Text>
+        <Text style={styles.alertDetails}>{details}</Text>
+        {timestamp && (
+          <Text style={styles.alertTime}>
+            {new Date(timestamp).toLocaleDateString()} • {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        )}
+      </View>
+      <TouchableOpacity 
+        style={styles.alertActionButton}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.alertActionText}>{buttonText}</Text>
+      </TouchableOpacity>
     </View>
-    <TouchableOpacity 
-      style={styles.alertActionButton}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.alertActionText}>{buttonText}</Text>
-    </TouchableOpacity>
-  </View>
-);
+  );
+};
 
 // Styles
 const styles = StyleSheet.create({
@@ -764,11 +1060,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   sectionTitle: { 
     fontSize: 20, 
     fontWeight: 'bold', 
     color: '#000',
-    marginBottom: 20,
+  },
+  clearAllText: {
+    fontSize: 16,
+    color: '#dc2626',
+    fontWeight: '500',
   },
   subsection: {
     marginBottom: 4,
@@ -839,11 +1145,13 @@ const styles = StyleSheet.create({
   },
   alertItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#f5f5f5',
+  },
+  alertIconContainer: {
+    marginRight: 12,
   },
   alertContent: {
     flex: 1,
@@ -858,6 +1166,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
     lineHeight: 20,
+    marginBottom: 2,
+  },
+  alertTime: {
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
   },
   alertActionButton: {
     backgroundColor: '#f0f0f0',
@@ -870,6 +1184,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0066cc',
     fontWeight: '500',
+  },
+  noAlertsContainer: {
+    paddingVertical: 30,
+    alignItems: 'center',
+  },
+  noAlertsText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 4,
+  },
+  noAlertsSubtext: {
+    fontSize: 14,
+    color: '#999',
   },
   actionButtons: {
     padding: 20,
@@ -885,8 +1212,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.5,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  testSMSButton: {
+    backgroundColor: '#059669',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   testAlertButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  testSMSButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
@@ -901,11 +1249,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   manageContactsButtonText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+  },
+  buttonIcon: {
+    marginRight: 10,
   },
   // Modal Styles
   modalOverlay: {

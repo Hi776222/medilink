@@ -184,7 +184,7 @@ import { useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import Navbar from "./components/Navbar"; // Import Navbar
+import Navbar from "./components/Navbar"; 
 
 // Screens
 import Login from "./screens/Login";

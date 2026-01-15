@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';//useeffect auto execution 
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';//comme localstorage sert a garder les activites,contacts d urgence...même après avoir fermé l’application
+
 
 const { width } = Dimensions.get('window');
 
@@ -25,8 +27,86 @@ const Home = () => {
   const [greeting, setGreeting] = useState('');
   const [emergencyStatus, setEmergencyStatus] = useState('All systems ready');
   const [locationStatus, setLocationStatus] = useState('Location enabled');
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
 
-  // Set current time and greeting
+  // Load activities and contacts from storage au démarage
+  useEffect(() => {
+    loadActivities();
+    loadContacts();
+  }, []);
+
+  // Reload when screen is focused quand le user revient sur home les donnees sont rafraîchies
+  useFocusEffect(
+    React.useCallback(() => {
+      loadActivities();
+      loadContacts();
+    }, [])
+  );
+//recupère activities from AsyncStorage/lire activities sauvegardés
+  const loadActivities = async () => {
+    try {
+      const activitiesJson = await AsyncStorage.getItem('recentActivities');
+      if (activitiesJson) {
+        const activities = JSON.parse(activitiesJson);
+        setRecentActivities(activities);
+      } else {
+        // Default activities
+        const defaultActivities = [
+          {
+            id: 1,
+            title: 'System check completed',
+            type: 'system',
+            time: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+            icon: 'check-circle',
+            color: '#10b981'
+          },
+          {
+            id: 2,
+            title: 'Location services enabled',
+            type: 'location',
+            time: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+            icon: 'location-on',
+            color: '#3b82f6'
+          },
+          {
+            id: 3,
+            title: 'Test SMS sent to emergency contacts',
+            type: 'sms',
+            time: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+            icon: 'sms',
+            color: '#dc2626'
+          }
+        ];
+        setRecentActivities(defaultActivities);
+        await AsyncStorage.setItem('recentActivities', JSON.stringify(defaultActivities));
+      }
+    } catch (error) {
+      console.error('Error loading activities:', error);
+    }
+  };
+
+  const loadContacts = async () => {
+    try {
+      const contactsJson = await AsyncStorage.getItem('emergencyContacts');
+      if (contactsJson) {
+        const contacts = JSON.parse(contactsJson);
+        setEmergencyContacts(contacts);
+      } else {
+        // Default contacts
+        const defaultContacts = [
+          { name: 'Mom', phone: '0650801456', type: 'family', emergency: true },
+          { name: 'Dad', phone: '0661234567', type: 'family', emergency: true },
+          { name: 'Brother', phone: '0678901234', type: 'family', emergency: false },
+        ];
+        setEmergencyContacts(defaultContacts);
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+    }
+  };
+
+  // Set current time and greeting chaque min
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -45,12 +125,6 @@ const Home = () => {
 
     return () => clearInterval(interval);
   }, []);
-
-  const emergencyContacts = [
-    { name: 'Mom', phone: '0650801456', type: 'family', emergency: true },
-    { name: 'Dad', phone: '0661234567', type: 'family', emergency: true },
-    { name: 'Brother', phone: '0678901234', type: 'family', emergency: false },
-  ];
 
   const quickActions = [
     {
@@ -94,7 +168,81 @@ const Home = () => {
     { name: 'Civil Protection', number: '160', icon: 'security', color: '#10b981' },
   ];
 
+  // Function to add new activity
+  const addActivity = async (title, type, icon = 'info') => {
+    try {
+      const newActivity = {
+        id: Date.now(),
+        title,
+        type,
+        time: new Date().toISOString(),
+        icon,
+        color: getActivityColor(type)
+      };
+//new activityjoutée en haut
+
+      const updatedActivities = [newActivity, ...recentActivities.slice(0, 9)]; // Keep only last 10
+      setRecentActivities(updatedActivities);
+      
+      await AsyncStorage.setItem('recentActivities', JSON.stringify(updatedActivities));
+      return true;
+    } catch (error) {
+      console.error('Error adding activity:', error);
+      return false;
+    }
+  };
+
+  const getActivityColor = (type) => {
+    switch(type) {
+      case 'sms': return '#dc2626';
+      case 'location': return '#3b82f6';
+      case 'system': return '#10b981';
+      case 'voice': return '#667eea';
+      case 'medical': return '#10b981';
+      case 'emergency': return '#f59e0b';
+      default: return '#666';
+    }
+  };
+
+  const getActivityIcon = (type) => {
+    switch(type) {
+      case 'sms': return 'sms';
+      case 'location': return 'location-on';
+      case 'system': return 'check-circle';
+      case 'voice': return 'mic';
+      case 'medical': return 'medical-services';
+      case 'emergency': return 'emergency';
+      default: return 'info';
+    }
+  };
+
   const handleQuickAction = (screen) => {
+    // Add activity for quick action on clique->Ajoute une activité/ Navigue vers l’écran correspondant
+
+
+    let activityTitle = '';
+    let activityType = '';
+    
+    switch(screen) {
+      case 'VoiceAssistant':
+        activityTitle = 'Voice assistant accessed';
+        activityType = 'voice';
+        break;
+      case 'Alerts':
+        activityTitle = 'Emergency alerts accessed';
+        activityType = 'system';
+        break;
+      case 'MedicalForm':
+        activityTitle = 'Medical profile accessed';
+        activityType = 'medical';
+        break;
+      case 'Map':
+        activityTitle = 'Location map accessed';
+        activityType = 'location';
+        break;
+    }
+    
+    addActivity(activityTitle, activityType);
     navigation.navigate(screen);
   };
 
@@ -106,9 +254,105 @@ const Home = () => {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Call Now', 
-          onPress: () => {
+          onPress: async () => {
+            await addActivity(`Called ${service}`, 'emergency');
             Alert.alert('Calling', `Connecting to ${service}...`);
             // In real app: Linking.openURL(`tel:${number}`)
+          }
+        }
+      ]
+    );
+  };
+
+  const handleShareLocation = () => {
+    Alert.alert(
+      'Share Location',
+      'Share your location with emergency contacts?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Share Now', 
+          onPress: async () => {
+            await addActivity('Location shared with contacts', 'location');
+            Alert.alert('Location Shared', 'Your location has been shared with emergency contacts');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleVoiceSOS = () => {
+    Alert.alert(
+      'Voice SOS',
+      'This will trigger an emergency alert. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Activate SOS', 
+          onPress: async () => {
+            await addActivity('Voice SOS activated', 'emergency');
+            Alert.alert(
+              'SOS Activated',
+              'Emergency alert sent to all contacts. Help is on the way.',
+              [{ text: 'OK' }]
+            );
+          }
+        }
+      ]
+    );
+  };
+// Historique des activités rediriger vers ActivityLogScreen
+  const handleViewAllActivities = () => {
+    navigation.navigate('ActivityLog', { activities: recentActivities });
+  };
+
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = (now - date) / (1000 * 60 * 60);
+    
+    if (diffInHours < 1) {
+      const minutes = Math.floor(diffInHours * 60);
+      return minutes === 0 ? 'Just now' : `${minutes} min ago`;
+    } else if (diffInHours < 24) {
+      const hours = Math.floor(diffInHours);
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else if (diffInHours < 48) {
+      return 'Yesterday';
+    } else {
+      const days = Math.floor(diffInHours / 24);
+      return `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+  };
+
+  const formatDetailedTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return `Today • ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday • ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      return `${date.toLocaleDateString()} • ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+  };
+//Supprimer toutes les activités
+  const clearAllActivities = () => {
+    Alert.alert(
+      'Clear All Activities',
+      'Are you sure you want to clear all recent activities?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear All', 
+          style: 'destructive',
+          onPress: async () => {
+            setRecentActivities([]);
+            await AsyncStorage.removeItem('recentActivities');
+            Alert.alert('Cleared', 'All activities cleared');
           }
         }
       ]
@@ -147,6 +391,10 @@ const Home = () => {
                 <Icon name="location-on" size={16} color="#3b82f6" />
                 <Text style={styles.statusText}>{locationStatus}</Text>
               </View>
+              <View style={styles.statusItem}>
+                <Icon name="history" size={16} color="#8b5cf6" />
+                <Text style={styles.statusText}>{recentActivities.length} activities</Text>
+              </View>
             </View>
           </View>
 
@@ -156,7 +404,7 @@ const Home = () => {
             <View style={styles.emergencyGrid}>
               <TouchableOpacity 
                 style={[styles.emergencyCard, { backgroundColor: '#fef2f2' }]}
-                onPress={() => navigation.navigate('VoiceAssistant')}
+                onPress={handleVoiceSOS}
               >
                 <LinearGradient
                   colors={['#dc2626', '#991b1b']}
@@ -172,16 +420,7 @@ const Home = () => {
 
               <TouchableOpacity 
                 style={[styles.emergencyCard, { backgroundColor: '#eff6ff' }]}
-                onPress={() => {
-                  Alert.alert(
-                    'Share Location',
-                    'Share your location with emergency contacts?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Share Now', onPress: () => Alert.alert('Location Shared', 'Your location has been shared') }
-                    ]
-                  );
-                }}
+                onPress={handleShareLocation}
               >
                 <LinearGradient
                   colors={['#3b82f6', '#1d4ed8']}
@@ -292,46 +531,108 @@ const Home = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>📋 Recent Activity</Text>
-              <TouchableOpacity onPress={() => Alert.alert('Activity', 'Showing all activity')}>
-                <Text style={styles.seeAllText}>View all</Text>
-              </TouchableOpacity>
+              <View style={styles.activityHeaderActions}>
+                <TouchableOpacity onPress={clearAllActivities} style={styles.clearButton}>
+                  <Text style={styles.clearButtonText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleViewAllActivities}>
+                  <Text style={styles.seeAllText}>View all</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             
             <View style={styles.activityList}>
-              <View style={styles.activityItem}>
-                <View style={[styles.activityIcon, { backgroundColor: '#f0fdf4' }]}>
-                  <Icon name="check-circle" size={20} color="#10b981" />
+              {recentActivities.length === 0 ? (
+                <View style={styles.noActivities}>
+                  <Icon name="history" size={48} color="#ccc" />
+                  <Text style={styles.noActivitiesText}>No recent activities</Text>
+                  <Text style={styles.noActivitiesSubtext}>Your activities will appear here</Text>
                 </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>System check completed</Text>
-                  <Text style={styles.activityTime}>Today • 9:30 AM</Text>
-                </View>
-              </View>
+              ) : (
+                recentActivities.slice(0, 5).map((activity) => (
+                  <TouchableOpacity 
+                    key={activity.id} 
+                    style={styles.activityItem}
+                    onPress={() => Alert.alert(
+                      activity.title,
+                      `Time: ${formatDetailedTime(activity.time)}\nType: ${activity.type}`,
+                      [{ text: 'OK' }]
+                    )}
+                  >
+                    <View style={[styles.activityIcon, { backgroundColor: getActivityColor(activity.type) + '20' }]}>
+                      <Icon 
+                        name={getActivityIcon(activity.type)} 
+                        size={20} 
+                        color={getActivityColor(activity.type)} 
+                      />
+                    </View>
+                    <View style={styles.activityContent}>
+                      <Text style={styles.activityTitle}>{activity.title}</Text>
+                      <Text style={styles.activityTime}>{formatTime(activity.time)}</Text>
+                    </View>
+                    <Icon name="chevron-right" size={20} color="#ccc" />
+                  </TouchableOpacity>
+                ))
+              )}
               
-              <View style={styles.activityItem}>
-                <View style={[styles.activityIcon, { backgroundColor: '#eff6ff' }]}>
-                  <Icon name="location-on" size={20} color="#3b82f6" />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Location services enabled</Text>
-                  <Text style={styles.activityTime}>Yesterday • 4:15 PM</Text>
-                </View>
-              </View>
-              
-              <View style={styles.activityItem}>
-                <View style={[styles.activityIcon, { backgroundColor: '#fef2f2' }]}>
-                  <Icon name="emergency" size={20} color="#dc2626" />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Test SOS sent to Mom</Text>
-                  <Text style={styles.activityTime}>Yesterday • 2:00 PM</Text>
-                </View>
-              </View>
+              {recentActivities.length > 5 && (
+                <TouchableOpacity 
+                  style={styles.viewMoreButton}
+                  onPress={handleViewAllActivities}
+                >
+                  <Text style={styles.viewMoreText}>View {recentActivities.length - 5} more activities</Text>
+                  <Icon name="arrow-forward" size={16} color="#3b82f6" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </ScrollView>
       </SafeAreaView>
     </View>
+  );
+};
+
+// Activity Log Screen Component (Add this to your navigation stack)
+const ActivityLogScreen = ({ route }) => {
+  const { activities } = route.params || {};
+  const [filter, setFilter] = useState('all');
+  
+  const filteredActivities = activities.filter(activity => {
+    if (filter === 'all') return true;
+    return activity.type === filter;
+  });
+  
+  const formatFullTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return `${date.toLocaleDateString()} • ${date.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    })}`;
+  };
+  
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView>
+        <View style={styles.activityLogContainer}>
+          <Text style={styles.activityLogTitle}>Activity Log</Text>
+          <Text style={styles.activityLogSubtitle}>{activities.length} activities</Text>
+          
+          {filteredActivities.map((activity) => (
+            <View key={activity.id} style={styles.activityLogItem}>
+              <View style={[styles.activityLogIcon, { backgroundColor: getActivityColor(activity.type) + '20' }]}>
+                <Icon name={getActivityIcon(activity.type)} size={24} color={getActivityColor(activity.type)} />
+              </View>
+              <View style={styles.activityLogContent}>
+                <Text style={styles.activityLogText}>{activity.title}</Text>
+                <Text style={styles.activityLogTime}>{formatFullTime(activity.time)}</Text>
+                <Text style={styles.activityLogType}>{activity.type}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -429,9 +730,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  activityHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   seeAllText: {
     fontSize: 14,
     color: '#3b82f6',
+    fontWeight: '600',
+  },
+  clearButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+  },
+  clearButtonText: {
+    fontSize: 12,
+    color: '#dc2626',
     fontWeight: '600',
   },
   emergencyGrid: {
@@ -666,6 +983,99 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  noActivities: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  noActivitiesText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  noActivitiesSubtext: {
+    fontSize: 14,
+    color: '#999',
+  },
+  viewMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    marginTop: 8,
+  },
+  viewMoreText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  // Activity Log Screen Styles
+  activityLogContainer: {
+    padding: 20,
+  },
+  activityLogTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 8,
+  },
+  activityLogSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+  },
+  activityLogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  activityLogIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  activityLogContent: {
+    flex: 1,
+  },
+  activityLogText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  activityLogTime: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  activityLogType: {
+    fontSize: 12,
+    color: '#999',
+    textTransform: 'uppercase',
+  },
 });
 
+// Add this to your navigation stack
+// In your navigation file (App.js or similar):
+/*
+import ActivityLogScreen from './screens/ActivityLogScreen';
+
+<Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
+*/
+
+export { ActivityLogScreen };
 export default Home;

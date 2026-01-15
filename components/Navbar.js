@@ -1,12 +1,12 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";//useroute Permet de savoir sur quel écran on se trouve actuellement.
 import Icon from "react-native-vector-icons/MaterialIcons";
 
 export default function Navbar() {
   const navigation = useNavigation();
   const route = useRoute();
-
+//elle vérifie si l’écran actuel est celui donné en paramètre.
   const isActive = (name) => route.name === name;
 
   return (

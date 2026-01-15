@@ -64,13 +64,13 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigation = useNavigation();
-
+//si email empty error
   const validateForm = () => {
     if (!email.trim()) {
       Alert.alert("Erreur", "Veuillez saisir votre email");
       return false;
     }
-    
+    //sans espaces, avec un seul @, un point obligatoire après le domaine, et aucun caractère avant ou après l’adresse.
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Alert.alert("Erreur", "Veuillez saisir un email valide");
@@ -89,7 +89,10 @@ export default function Register() {
     
     return true;
   };
-
+//Fonction appelle lorsque on clique sur register async pour ne pas bloquer l app action qui prend du temps
+//si le formulaire n est pas valide on s arrete
+//sans await le code continue avant que l’utilisateur soit créé
+//on attend que l’utilisateur soit bien déconnecté avant de continuer
   const handleRegister = async () => {
     if (!validateForm()) return;
     
@@ -139,7 +142,7 @@ export default function Register() {
                 style={styles.backButton}
                 onPress={() => navigation.goBack()}
               >
-                <Icon name="arrow-left" size={24} color="#0275d8" />
+                <Icon name="arrow-left" size={24} color=" #0275d8" />
               </TouchableOpacity>
               <Text style={styles.title}>Créer un compte</Text>
               <Text style={styles.subtitle}>

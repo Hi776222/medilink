@@ -13,14 +13,14 @@ import {
   Dimensions,
   Linking,
 } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
-import * as Location from "expo-location";
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";//la carte Google et les marqueurs
+import * as Location from "expo-location";// l’API pour accéder à la localisation de l’utilisateu
 import Navbar from "../components/Navbar";
 import Icon from "react-native-vector-icons/MaterialIcons";
 
-const { width, height } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");//récupère la largeur et la hauteur de l’écran
 
-// Moroccan emergency numbers
+//  emergency numbers
 const MOROCCAN_EMERGENCY_NUMBERS = {
   police: "19",
   ambulance: "15",
@@ -31,7 +31,7 @@ const MOROCCAN_EMERGENCY_NUMBERS = {
   touristPolice: "0522 438 860",
 };
 
-// Real Moroccan emergency centers (will be dynamically updated based on user location)
+// Liste des hôpitaux et postes de police avec coordonnées, téléphone et adresse.
 const MOROCCAN_EMERGENCY_CENTERS = [
   {
     id: 1,
@@ -95,20 +95,20 @@ const MOROCCAN_EMERGENCY_CENTERS = [
   },
 ];
 
-// Moroccan emergency contacts (ICE - In Case of Emergency)
+//  emergency contacts (ICE - In Case of Emergency)
 const MOROCCAN_ICE_CONTACTS = [
   {
     id: 1,
     name: "Maman",
     relationship: "Mère",
-    phone: "+212 612-345678", // Moroccan mobile format
+    phone: "+212 612-345678", //  mobile format
     receivingUpdates: true,
   },
   {
     id: 2,
     name: "Papa",
     relationship: "Père",
-    phone: "+212 698-765432", // Moroccan mobile format
+    phone: "+212 698-765432", //  mobile format
     receivingUpdates: true,
   },
   {
@@ -120,7 +120,7 @@ const MOROCCAN_ICE_CONTACTS = [
   },
 ];
 
-// Moroccan cities database for local detection
+//  cities database for local detection
 const MOROCCAN_CITIES = [
   { name: "Rabat", lat: 34.0209, lng: -6.8416, radius: 0.25 },
   { name: "Casablanca", lat: 33.5731, lng: -7.5898, radius: 0.45 },
@@ -148,8 +148,8 @@ export default function MapScreen() {
   const [nearestLocations, setNearestLocations] = useState([]);
   const [userCity, setUserCity] = useState("Maroc");
 
-  const mapRef = useRef(null);
-  const timerRef = useRef(null);
+  const mapRef = useRef(null);//accéder à la carte pour React ne fait pas re-render quand tu changes la valeur dedan
+  const timerRef = useRef(null);//gérer le timer du partage en direct
 
   useEffect(() => {
     requestLocationPermission();
@@ -713,8 +713,7 @@ export default function MapScreen() {
         <View style={styles.noticeBox}>
           <Icon name="info" size={16} color="#666" />
           <Text style={styles.noticeText}>
-            En cas d'urgence, composez directement le 19 (Police), 15 (SAMU) ou 177 (Gendarmerie Royale)
-          </Text>
+n case of emergency, dial 19 (Police), 15 (Ambulance), or 177 (Royal Gendarmerie) directly          </Text>
         </View>
 
         {/* Spacer for navbar */}

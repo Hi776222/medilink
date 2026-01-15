@@ -75,8 +75,8 @@ import {
   Alert,
 } from "react-native";
 
-import { auth } from "../firebaseConfig";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { auth } from "../firebaseConfig";// savoir quel utilisateur est connecté.
+import { getFirestore, doc, setDoc } from "firebase/firestore";//ACECDER/CREER DOC/enregistrer donne dans firebase
 import Navbar from "../components/Navbar";
 
 export default function MedicalForm({ navigation }) {
@@ -94,12 +94,12 @@ export default function MedicalForm({ navigation }) {
       return;
     }
 
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = auth.currentUser;//Récupère l’utilisateur connecté.
+    if (!user) return;//Si aucun utilisateur n’est connecté → arrête la fonction.
 
-    const db = getFirestore();
-    const userRef = doc(db, "users", user.uid);
-
+    const db = getFirestore();//On accède à la base de données Firestore.
+    const userRef = doc(db, "users", user.uid);//On crée un document spécifique pour cet utilisateur dans la collection users.
+//On enregistre toutes les informations dans Firestore 
     await setDoc(userRef, {
       name,
       dob,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 130, // 👈 مهم بزاف
+    paddingBottom: 130, 
   },
   title: {
     fontSize: 24,

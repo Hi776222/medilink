@@ -24,18 +24,18 @@ const { width } = Dimensions.get('window');
 
 const VoiceAssistantScreen = () => {
   const insets = useSafeAreaInsets();
-  const [isListening, setIsListening] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [transcript, setTranscript] = useState('');
+  const [isListening, setIsListening] = useState(false);//État pour savoir si le micro est en train d’écouter.
+  const [recordingTime, setRecordingTime] = useState(0);//Temps d’enregistrement en secondes.
+  const [transcript, setTranscript] = useState('');//Texte de la commande vocale reconnue.
   const [recentActions, setRecentActions] = useState([
     { id: 1, command: 'Call Mom', time: 'Today • 2:18 PM', details: 'Connected for 3:45', type: 'call' },
     { id: 2, command: 'Send SOS to Dad', time: 'Today • 1:02 PM', details: 'Delivered', type: 'sos' },
-  ]);
-  const [showVoiceCommands, setShowVoiceCommands] = useState(false);
-  const [showHowMicWorks, setShowHowMicWorks] = useState(false); // New state for mic info
+  ]);//Liste des actions récentes effectuées par l’utilisateur (appels, SOS, etc.)
+  const [showVoiceCommands, setShowVoiceCommands] = useState(false);//La liste des commandes vocales.
+  const [showHowMicWorks, setShowHowMicWorks] = useState(false); // Comment fonctionne le micro.
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // HARDCODED CONTACTS - CHANGE THESE NUMBERS TO YOUR REAL CONTACTS
+  // Une liste des contacts d’urgence avec nom, téléphone et type (famille ou urgence).
   const EMERGENCY_CONTACTS = {
     mom: {
       name: 'Mom',
@@ -69,7 +69,9 @@ const VoiceAssistantScreen = () => {
     }
   };
 
-  // Voice recording timer
+  // Si le micro écoute → démarre un timer (recordingTime) et une animation pulsante.
+  //Après 5 secondes, arrête l’écoute et montre la liste des commandes.
+  //Sinon → réinitialise le temps et l’animation.
   useEffect(() => {
     let interval;
     if (isListening) {
@@ -266,7 +268,7 @@ const VoiceAssistantScreen = () => {
 
   // Send SOS alert
   const sendSOSAlert = () => {
-    const emergencyContacts = Object.values(EMERGENCY_CONTACTS).filter(c => c.emergency);
+    const emergencyContacts = Object.values(EMERGENCY_CONTACTS).filter(c => c.emergency);//C’est un objet qui contient tous tes contacts d’urgence.
     const emergencyNumbers = emergencyContacts.map(c => `${c.name}: ${c.phone}`).join('\n');
     
     Alert.alert(

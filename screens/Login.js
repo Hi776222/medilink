@@ -52,27 +52,27 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebaseConfig";
+import { signInWithEmailAndPassword } from "firebase/auth";//function firebase pour login avec email and pswd
+import { auth } from "../firebaseConfig";//recuperer la config firebase
 import Icon from "react-native-vector-icons/MaterialIcons";
 
 export default function Login({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
+  const [isLoading, setIsLoading] = useState(false);//si la cnx est en cours
+//fonction appellée lorsque on click sur login si emailor pswd empty error
   const handleLogin = () => {
     if (!email || !password) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs");
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
-
+//on active le chargement
     setIsLoading(true);
+    //firebase essaie de connecter l’utilisateur si ya une erreur on arrete le chargement
     signInWithEmailAndPassword(auth, email, password)
       .then(() => {
-        Alert.alert("🎉 Connexion réussie", "Bienvenue sur MediLink!");
-        // ✅ REDIRECT TO HOME INSTEAD OF MEDICALFORM
+        Alert.alert("🎉 Connected successfully", "Welcome to MediLink!");
         navigation.replace("Home");
       })
       .catch((error) => {
@@ -91,7 +91,7 @@ export default function Login({ navigation }) {
         }
       });
   };
-
+//l affichage de l ecran login
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -110,21 +110,21 @@ export default function Login({ navigation }) {
               <Icon name="medical-services" size={60} color="#2F80ED" />
             </View>
             <Text style={styles.appName}>MediLink</Text>
-            <Text style={styles.appTagline}>Votre assistant médical d'urgence</Text>
+            <Text style={styles.appTagline}>Your emergency medical assistant</Text>
           </View>
 
           {/* Login Form */}
           <View style={styles.formContainer}>
-            <Text style={styles.welcomeTitle}>Bienvenue</Text>
+            <Text style={styles.welcomeTitle}>Welcome</Text>
             <Text style={styles.welcomeSubtitle}>
-              Connectez-vous pour accéder à votre compte
+              Log in to access your account
             </Text>
 
             {/* Email Input */}
             <View style={styles.inputContainer}>
               <Icon name="email" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
-                placeholder="Adresse email"
+                placeholder="Email address"
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
@@ -138,7 +138,7 @@ export default function Login({ navigation }) {
             <View style={styles.inputContainer}>
               <Icon name="lock" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
-                placeholder="Mot de passe"
+                placeholder="Password"
                 style={[styles.input, { paddingRight: 50 }]}
                 secureTextEntry={!showPassword}
                 value={password}
@@ -162,7 +162,7 @@ export default function Login({ navigation }) {
               style={styles.forgotPassword}
               onPress={() => Alert.alert("Mot de passe oublié", "Fonctionnalité à venir")}
             >
-              <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
+              <Text style={styles.forgotPasswordText}>Forgot password ?</Text>
             </TouchableOpacity>
 
             {/* Login Button */}
@@ -180,7 +180,7 @@ export default function Login({ navigation }) {
               ) : (
                 <View style={styles.loginButtonContent}>
                   <Icon name="login" size={20} color="#fff" style={styles.buttonIcon} />
-                  <Text style={styles.loginButtonText}>Se connecter</Text>
+                  <Text style={styles.loginButtonText}>Login</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -227,7 +227,7 @@ export default function Login({ navigation }) {
               <Text style={styles.footerLink}>Conditions d'utilisation</Text> et{" "}
               <Text style={styles.footerLink}>Politique de confidentialité</Text>
             </Text>
-            <Text style={styles.copyright}>© 2024 MediLink. Tous droits réservés.</Text>
+            <Text style={styles.copyright}>© 2026 MediLink. Tous droits réservés.</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

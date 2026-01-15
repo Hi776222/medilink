@@ -61,11 +61,11 @@ import {
 } from 'react-native';
 
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';//getDoc → pour récupérer les données d’un document.
+import { signOut } from 'firebase/auth';//SE DECONNECT2
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import Navbar from '../components/Navbar'; // 👈 NAVBAR
+import Navbar from '../components/Navbar'; 
 
 export default function Profile() {
   const [userData, setUserData] = useState(null);
@@ -73,12 +73,14 @@ export default function Profile() {
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState(null);
   const navigation = useNavigation();
-
+//Quand la page s’ouvre pour la première fois :On récupère les données de l’utilisateur avec fetchUserData().On stocke l’utilisateur connecté dans user.
+// [] → ça se fait une seule fois au chargement de la page
   useEffect(() => {
     fetchUserData();
     setUser(auth.currentUser);
   }, []);
-
+//Fonction pour charger les données de l’utilisateur depuis Firestore.
+//verification de cnx
   const fetchUserData = async () => {
     try {
       const currentUser = auth.currentUser;
@@ -87,9 +89,10 @@ export default function Profile() {
         return;
       }
 
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      const docSnap = await getDoc(userDocRef);
-
+      const userDocRef = doc(db, 'users', currentUser.uid); //référence au document de l’utilisateur dans Firestore.
+      const docSnap = await getDoc(userDocRef);//récupère les données de ce document.
+//Si les données existent → on les stocke dans userData.
+// Sinon → on envoie l’utilisateur à la page MedicalForm pour remplir son profil.
       if (docSnap.exists()) {
         setUserData(docSnap.data());
       } else {
@@ -102,7 +105,7 @@ export default function Profile() {
       setRefreshing(false);
     }
   };
-
+//Fonction pour rafraîchir le profil quand on tire l’écran vers le bas.
   const onRefresh = () => {
     setRefreshing(true);
     fetchUserData();
@@ -146,7 +149,7 @@ export default function Profile() {
       </View>
     );
   }
-
+//Si aucune donnée → n’affiche rien.
   if (!userData) return null;
 
   return (
@@ -177,7 +180,7 @@ export default function Profile() {
       >
         <Section title="personal informations" icon="person" color="#4A90E2">
           <InfoRow icon="cake" label="Date of birth" value={formatDate(userData.dob)} />
-          <InfoRow icon="scale" label="wWeight" value={`${userData.weight} kg`} />
+          <InfoRow icon="scale" label="Weight" value={`${userData.weight} kg`} />
           <InfoRow icon="straighten" label="Height" value={`${userData.height} cm`} />
           <InfoRow icon="bloodtype" label="Bloodtype" value={userData.bloodType} />
         </Section>
